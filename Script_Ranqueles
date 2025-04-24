@@ -1,0 +1,99 @@
+#entorno limpio
+rm(list = ls()) 
+
+getwd() #obtenemos dirección de la carpeta de trabajo
+
+#instalo librerías necesarias
+install.packages("tidyverse") 
+install.packages("tidytext") 
+install.packages("ggplot2")
+install.packages("tm")
+install.packages("wordcloud") 
+install.packages("RColorBrewer") 
+install.packages("dplR")
+
+# Cargar las librerías necesarias
+library(tidyverse)
+library(tidytext)
+library(ggplot2)
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(dplyr)
+
+# Especificar la URL y el nombre del archivo destino
+url <- "https://www.gutenberg.org/cache/epub/63600/pg63600.txt"
+destfile <- "ranqueles.txt"
+
+# Descargar el archivo
+download.file(url, destfile, method = "auto")
+
+# Leer el archivo descargado
+text <- readLines(destfile, warn = FALSE)
+
+# Mostrar las primeras líneas del texto
+head(text)
+
+# Convertir el texto a un data frame
+text_df <- data.frame(line = seq_along(text), text = text, stringsAsFactors = FALSE)
+
+# Mostrar las primeras filas del data frame
+head(text_df)
+
+#Preprocesar el texto
+text_df <- text_df %>% #token se llama a la parte más pequeña de una secuencia de texto
+  unnest_tokens(word, text) #unnest_tokens, se encuentra dentro del paquete tidytext, sirve para dividir el texto en palabras individuales
+
+#Calcular frecuencias de palabras
+word_counts <- text_df %>%
+  count(word, sort = TRUE) #count cuenta la frecuencia de cada palabra 
+
+#Calcular la densidad de vocabulario
+total_words <- nrow(text_df)
+unique_words <- n_distinct(text_df$word) #número de palabras únicas dividido por el total de palabras
+vocab_density <- unique_words / total_words #densidad de vocabulario, recuerden la definición que vimos en Voyant
+
+#Calcular frecuencias relativas
+word_counts <- word_counts %>%
+  mutate(relative_frequency = n / total_words) 
+
+#descargamos una lista de palabras vacías en español, si utiliza en otro idioma buscar en Help el código de descarga
+stopwords1 <- get_stopwords("es") # get_stopwords forma parte del paquete tidytext
+
+# Eliminar palabras vacías de nuestro dataframe
+word_counts <- word_counts %>% 
+  anti_join(stopwords1) 
+
+# Eliminar palabras vacías y palabras no deseadas
+word_counts <- word_counts %>% 
+  anti_join(stopwords1) %>%
+  filter(nchar(word) > 3) %>% 
+  filter(!is.na(word) & word != "") %>%
+  filter(!(word %in% c("dijo", "hacia", "entonces", "modo", "this", "luego", "aquí", "toda", "gran", "the", "gutenberg", "project", "después", "pues")))
+
+# Frecuencia de las 25 palabras más comunes
+top_words <- word_counts %>%
+  top_n(25, n)
+
+# Gráfico de las palabras más frecuentes
+ggplot(top_words, aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Frecuencia de Palabras", x = "Palabras", y = "Frecuencia")
+
+# Nube de palabras
+wordcloud(words = word_counts$word, 
+          freq = word_counts$n, 
+          min.freq = 1, 
+          max.words = 300, 
+          random.order = FALSE, 
+          rot.per = 0.35,  
+          colors = brewer.pal(8, "Dark2"))
+
+# Mostrar la densidad de vocabulario
+print(paste("Densidad de Vocabulario:", vocab_density))
+
+# Opcional, Guardar resultados en un archivo CSV
+write.csv(word_counts, "word_counts.csv", row.names = FALSE)
+
